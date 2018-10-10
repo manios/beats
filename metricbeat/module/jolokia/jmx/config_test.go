@@ -96,3 +96,347 @@ func TestCanonicalMBeanName(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildJolokiaGETUri(t *testing.T) {
+	cases := []struct {
+		mbean     string
+		attribute *Attribute
+		expected  string
+	}{
+		{
+			mbean: `java.lang:type=Memory`,
+			attribute: &Attribute{
+				Attr: `NonHeapMemoryUsage`,
+			},
+			expected: `/read/java.lang:type=Memory/NonHeapMemoryUsage?ignoreErrors=true&canonicalNaming=false`,
+		},
+		{
+			mbean: `java.lang:type=Memory`,
+			attribute: &Attribute{
+				Attr:  `NonHeapMemoryUsage`,
+				Field: `max`,
+			},
+			expected: `/read/java.lang:type=Memory/NonHeapMemoryUsage/max?ignoreErrors=true&canonicalNaming=false`,
+		},
+		{
+			mbean: `Catalina:name=HttpRequest1,type=RequestProcessor,worker=!"http-nio-8080!"`,
+			attribute: &Attribute{
+				Attr:  `globalProcessor`,
+				Field: `maxTime`,
+			},
+			expected: `/read/Catalina:name=HttpRequest1,type=RequestProcessor,worker=!"http-nio-8080!"/globalProcessor/maxTime?ignoreErrors=true&canonicalNaming=false`,
+		},
+	}
+
+	for _, c := range cases {
+		jolokiaGETClient := &JolokiaHTTPGetClient{}
+		getURI := jolokiaGETClient.buildJolokiaGETUri(c.mbean, *c.attribute)
+
+		assert.Equal(t, c.expected, getURI, "mbean: "+c.mbean)
+
+	}
+}
+
+func TestParseMBean(t *testing.T) {
+
+	cases := []struct {
+		mbean    string
+		expected *MBeanName
+		ok       bool
+	}{
+		{
+			mbean: ``,
+			ok:    false,
+		},
+		{
+			mbean: `type=Runtime`,
+			ok:    false,
+		},
+		{
+			mbean: `java.lang`,
+			ok:    false,
+		},
+		{
+			mbean: `java.lang:`,
+			ok:    false,
+		},
+		{
+			mbean: `java.lang:type=Runtime,name`,
+			ok:    false,
+		},
+		{
+			mbean: `java.lang:type=Runtime`,
+			expected: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"type": "Runtime",
+				},
+			},
+			ok: true,
+		},
+		{
+			mbean: `java.lang:name=Foo,type=Runtime`,
+			expected: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "Foo",
+					"type": "Runtime",
+				},
+			},
+			ok: true,
+		},
+		{
+			mbean: `java.lang:name=Foo,type=Runtime`,
+			expected: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "Foo",
+					"type": "Runtime",
+				},
+			},
+			ok: true,
+		},
+		{
+			mbean: `java.lang:type=Runtime,name=Foo*`,
+			expected: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "Foo*",
+					"type": "Runtime",
+				},
+			},
+			ok: true,
+		},
+		{
+			mbean: `java.lang:type=Runtime,name=*`,
+			expected: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "*",
+					"type": "Runtime",
+				},
+			},
+			ok: true,
+		},
+		{
+			mbean: `java.lang:name="foo,bar",type=Runtime`,
+			expected: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": `"foo,bar"`,
+					"type": "Runtime",
+				},
+			},
+			ok: true,
+		},
+		{
+			mbean: `java.lang:type=Memory`,
+			expected: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"type": "Memory",
+				},
+			},
+			ok: true,
+		},
+		{
+			mbean: `Catalina:name=HttpRequest1,type=RequestProcessor,worker="http-nio-8080"`,
+			expected: &MBeanName{
+				Domain: `Catalina`,
+				Properties: map[string]string{
+					"name":   "HttpRequest1",
+					"type":   "RequestProcessor",
+					"worker": `"http-nio-8080"`,
+				},
+			},
+			ok: true,
+		},
+	}
+
+	for _, c := range cases {
+		beanObj, err := ParseMBeanName(c.mbean)
+
+		if c.ok {
+			assert.NoError(t, err, "failed parsing for: "+c.mbean)
+			assert.Equal(t, c.expected, beanObj, "mbean: "+c.mbean)
+		} else {
+			assert.Error(t, err, "should have failed for: "+c.mbean)
+		}
+	}
+
+}
+
+func TestCanonicalize(t *testing.T) {
+
+	cases := []struct {
+		mbean    *MBeanName
+		expected string
+		escape   bool
+	}{
+
+		{
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"type": "Runtime",
+				},
+			},
+			escape:   true,
+			expected: `java.lang:type=Runtime`,
+		},
+		{
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"type": "Runtime",
+				},
+			},
+			escape:   false,
+			expected: `java.lang:type=Runtime`,
+		},
+		{
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "Foo",
+					"type": "Runtime",
+				},
+			},
+			escape:   true,
+			expected: `java.lang:name=Foo,type=Runtime`,
+		},
+		{
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "Foo",
+					"type": "Runtime",
+				},
+			},
+			escape:   false,
+			expected: `java.lang:name=Foo,type=Runtime`,
+		},
+		{
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "Foo",
+					"type": "Runtime",
+				},
+			},
+			escape:   true,
+			expected: `java.lang:name=Foo,type=Runtime`,
+		},
+		{
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "Foo*",
+					"type": "Runtime",
+				},
+			},
+			escape:   true,
+			expected: `java.lang:name=Foo*,type=Runtime`,
+		},
+		{
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": "*",
+					"type": "Runtime",
+				},
+			},
+			escape:   true,
+			expected: `java.lang:name=*,type=Runtime`,
+		},
+		{
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"name": `"foo,bar"`,
+					"type": "Runtime",
+				},
+			},
+			escape:   true,
+			expected: `java.lang:name=!"foo,bar!",type=Runtime`,
+		},
+		{
+			expected: `java.lang:type=Memory`,
+			mbean: &MBeanName{
+				Domain: `java.lang`,
+				Properties: map[string]string{
+					"type": "Memory",
+				},
+			},
+			escape: true,
+		},
+		{
+			expected: `jboss.jmx:alias=jmx!/rmi!/RMIAdaptor!/State`,
+			mbean: &MBeanName{
+				Domain: `jboss.jmx`,
+				Properties: map[string]string{
+					"alias": "jmx/rmi/RMIAdaptor/State",
+				},
+			},
+			escape: true,
+		},
+		{
+			mbean: &MBeanName{
+				Domain: `Catalina`,
+				Properties: map[string]string{
+					"name":   "HttpRequest1",
+					"type":   "RequestProcessor",
+					"worker": `"http-nio-8080"`,
+				},
+			},
+			escape:   true,
+			expected: `Catalina:name=HttpRequest1,type=RequestProcessor,worker=!"http-nio-8080!"`,
+		},
+	}
+
+	for _, c := range cases {
+		canonicalString := c.mbean.Canonicalize(c.escape)
+
+		assert.Equal(t, c.expected, canonicalString)
+	}
+
+}
+
+func TestMBeanAttributeHasField(t *testing.T) {
+
+	cases := []struct {
+		attribute *Attribute
+		expected  bool
+	}{
+
+		{
+			attribute: &Attribute{
+				Attr:  "CollectionTime",
+				Field: "",
+			},
+			expected: false,
+		},
+		{
+			attribute: &Attribute{
+				Attr:  "CollectionTime",
+				Field: "  ",
+			},
+
+			expected: false,
+		},
+		{
+			attribute: &Attribute{
+				Attr:  "CollectionTime",
+				Field: "gc.cms_collection_time",
+			},
+			expected: true,
+		},
+	}
+
+	for _, c := range cases {
+		jolokiaGETClient := &JolokiaHTTPGetClient{}
+		hasField := jolokiaGETClient.mBeanAttributeHasField(c.attribute)
+
+		assert.Equal(t, c.expected, hasField, "mbean attribute: "+c.attribute.Attr, "mbean attribute field: "+c.attribute.Field)
+	}
+}

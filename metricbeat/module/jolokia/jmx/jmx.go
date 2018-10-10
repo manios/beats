@@ -63,8 +63,9 @@ type MetricSet struct {
 // New create a new instance of the MetricSet
 func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 	config := struct {
-		Namespace string       `config:"namespace" validate:"required"`
-		Mappings  []JMXMapping `config:"jmx.mappings" validate:"required"`
+		Namespace  string       `config:"namespace" validate:"required"`
+		HTTPMethod string       `config:"http_method"`
+		Mappings   []JMXMapping `config:"jmx.mappings" validate:"required"`
 	}{}
 
 	if err := base.Module().UnpackConfig(&config); err != nil {
