@@ -211,20 +211,22 @@ func ParseMBeanName(mBeanName string) (*MBeanName, error) {
 // Jolokia
 type JolokiaHTTPClient interface {
 	// Fetches the information from Jolokia server regarding MBeans
-	BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) (httpReqs []*helper.HTTP, err error)
+	BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error)
 	// Maps the Jolokia response to Metricbeat events
 	EventMapping(httpResponseBodies []string) ([]common.MapStr, error)
+	// PrintPreRequestDebugMessage prints the body and URI of the request to be sent to Jolokia. The output is printed to the logs only if debugging is enabled.
+	PrintPreRequestDebugMessage()
 }
 
 type JolokiaHTTPGetClient struct {
 }
 
-func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) (httpReqs []*helper.HTTP, err error) {
+func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error) {
 
 	// Create Jolokia URLs
-	uris, _, err := pc.buildGetRequestURIs(configMappings)
+	uris, responseMapping, err := pc.buildGetRequestURIs(configMappings)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Create one or more HTTP GET requests
@@ -236,13 +238,13 @@ func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMap
 		http.SetURI(base.HostData().SanitizedURI + i)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		httpRequests = append(httpRequests, http)
 	}
 
-	return httpRequests, nil
+	return httpRequests, responseMapping, err
 }
 
 func (pc *JolokiaHTTPGetClient) EventMapping(httpResponseBodies []string) ([]common.MapStr, error) {
@@ -330,10 +332,24 @@ func (pc *JolokiaHTTPGetClient) buildGetRequestURIs(mappings []JMXMapping) ([]st
 type JolokiaHTTPPostClient struct {
 }
 
-func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) (httpReqs []*helper.HTTP, err error) {
+func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error) {
 
-	// TODO Do not return error
-	return nil, nil
+	body, mapping, err := pc.buildRequestBodyAndMapping(configMappings)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	http, err := helper.NewHTTP(base)
+	if err != nil {
+		return nil, nil, err
+	}
+	http.SetMethod("POST")
+	http.SetBody(body)
+
+	// Create an array with only one HTTP POST request
+	httpRequests := []*helper.HTTP{http}
+
+	return httpRequests, mapping, nil
 }
 
 func (pc *JolokiaHTTPPostClient) EventMapping(httpResponseBodies []string) ([]common.MapStr, error) {
@@ -418,7 +434,8 @@ func (pc *JolokiaHTTPPostClient) buildRequestBodyAndMapping(mappings []JMXMappin
 	return content, responseMapping, err
 }
 
-// NewJolokiaHTTPClient is a factory method which creates and returns
+// NewJolokiaHTTPClient is a factory method which creates and returns an implementation
+// class of JolokiaHTTPClient interface. HTTP GET and POST are currently supported.
 func NewJolokiaHTTPClient(httpMethod string) JolokiaHTTPClient {
 
 	if httpMethod == "GET" {

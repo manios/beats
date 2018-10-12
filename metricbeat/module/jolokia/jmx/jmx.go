@@ -56,7 +56,7 @@ type MetricSet struct {
 	mb.BaseMetricSet
 	mapping   AttributeMapping
 	namespace string
-	http      *helper.HTTP
+	http      []*helper.HTTP
 	log       *logp.Logger
 }
 
@@ -72,59 +72,62 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 		return nil, err
 	}
 
-	body, mapping, err := buildRequestBodyAndMapping(config.Mappings)
-	if err != nil {
-		return nil, err
-	}
+	jolokiaClient := NewJolokiaHTTPClient(config.HTTPMethod)
 
-	http, err := helper.NewHTTP(base)
+	httpReqs, mapping, err := jolokiaClient.BuildRequestsAndMappings(config.Mappings, base)
 	if err != nil {
 		return nil, err
 	}
-	http.SetMethod("POST")
-	http.SetBody(body)
 
 	log := logp.NewLogger(metricsetName).With("host", base.HostData().Host)
 
 	if logp.IsDebug(metricsetName) {
-		log.Debugw("Jolokia request body",
-			"body", string(body), "type", "request")
+		// FIXME add debug
+		// log.Debugw("Jolokia request body",
+		// 	"body", string(body), "type", "request")
 	}
 
 	return &MetricSet{
 		BaseMetricSet: base,
 		mapping:       mapping,
 		namespace:     config.Namespace,
-		http:          http,
+		http:          httpReqs,
 		log:           log,
 	}, nil
 }
 
 // Fetch methods implements the data gathering and data conversion to the right format
 func (m *MetricSet) Fetch() ([]common.MapStr, error) {
-	body, err := m.http.FetchContent()
-	if err != nil {
-		return nil, err
-	}
 
-	if logp.IsDebug(metricsetName) {
-		m.log.Debugw("Jolokia response body",
-			"host", m.HostData().Host, "body", string(body), "type", "response")
-	}
+	var allEvents []common.MapStr
 
-	events, err := eventMapping(body, m.mapping)
-	if err != nil {
-		return nil, err
+	for _, http := range m.http {
+		body, err := http.FetchContent()
+		if err != nil {
+			return nil, err
+		}
+
+		if logp.IsDebug(metricsetName) {
+			m.log.Debugw("Jolokia response body",
+				"host", m.HostData().Host, "body", string(body), "type", "response")
+		}
+
+		events, err := eventMapping(body, m.mapping)
+		if err != nil {
+			return nil, err
+		}
+
+		allEvents = append(allEvents, events...)
 	}
 
 	// Set dynamic namespace.
 	var errs multierror.Errors
-	for _, event := range events {
-		_, err = event.Put(mb.NamespaceKey, m.namespace)
+	for _, event := range allEvents {
+		_, err := event.Put(mb.NamespaceKey, m.namespace)
 		if err != nil {
 			errs = append(errs, err)
 		}
 	}
 
-	return events, errs.Err()
+	return allEvents, errs.Err()
 }
