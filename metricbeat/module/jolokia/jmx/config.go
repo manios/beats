@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/elastic/beats/libbeat/common"
+	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/beats/metricbeat/helper"
 	"github.com/elastic/beats/metricbeat/mb"
 )
@@ -211,23 +212,23 @@ func ParseMBeanName(mBeanName string) (*MBeanName, error) {
 // Jolokia
 type JolokiaHTTPClient interface {
 	// Fetches the information from Jolokia server regarding MBeans
-	BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error)
+	BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet, metricsetName string) ([]*helper.HTTP, AttributeMapping, error)
 	// Maps the Jolokia response to Metricbeat events
 	EventMapping(httpResponseBodies []string) ([]common.MapStr, error)
-	// PrintPreRequestDebugMessage prints the body and URI of the request to be sent to Jolokia. The output is printed to the logs only if debugging is enabled.
-	PrintPreRequestDebugMessage()
 }
 
 type JolokiaHTTPGetClient struct {
 }
 
-func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error) {
+func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet, metricsetName string) ([]*helper.HTTP, AttributeMapping, error) {
 
 	// Create Jolokia URLs
 	uris, responseMapping, err := pc.buildGetRequestURIs(configMappings)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	log := logp.NewLogger(metricsetName).With("host", base.HostData().Host)
 
 	// Create one or more HTTP GET requests
 	var httpRequests []*helper.HTTP
@@ -236,6 +237,11 @@ func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMap
 
 		http.SetMethod("GET")
 		http.SetURI(base.HostData().SanitizedURI + i)
+
+		if logp.IsDebug(metricsetName) {
+			log.Debugw("Jolokia GET request",
+				"URI", http.GetURI, "type", "request")
+		}
 
 		if err != nil {
 			return nil, nil, err
@@ -247,6 +253,7 @@ func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMap
 	return httpRequests, responseMapping, err
 }
 
+// EventMapping da
 func (pc *JolokiaHTTPGetClient) EventMapping(httpResponseBodies []string) ([]common.MapStr, error) {
 
 	// TODO Do not return error
@@ -255,7 +262,7 @@ func (pc *JolokiaHTTPGetClient) EventMapping(httpResponseBodies []string) ([]com
 
 // Builds a GET URI which will have the following format:
 //
-// /read/<mbean>/<attribute/[path]?ignoreErrors=true&canonicalNaming=false
+// /read/<mbean>/<attribute>/[path]?ignoreErrors=true&canonicalNaming=false
 func (pc *JolokiaHTTPGetClient) buildJolokiaGETUri(mbean string, attr Attribute) string {
 	initialURI := "/read/%s?ignoreErrors=true&canonicalNaming=false"
 
@@ -272,9 +279,9 @@ func (pc *JolokiaHTTPGetClient) buildJolokiaGETUri(mbean string, attr Attribute)
 
 func (pc *JolokiaHTTPGetClient) mBeanAttributeHasField(attr *Attribute) bool {
 
-	if attr.Field != "" && (strings.Trim(attr.Field, " ") != "") {
-		return true
-	}
+	// if attr.Field != "" && (strings.Trim(attr.Field, " ") != "") {
+	// 	return true
+	// }
 
 	return false
 }
@@ -332,7 +339,7 @@ func (pc *JolokiaHTTPGetClient) buildGetRequestURIs(mappings []JMXMapping) ([]st
 type JolokiaHTTPPostClient struct {
 }
 
-func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error) {
+func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet, metricsetName string) ([]*helper.HTTP, AttributeMapping, error) {
 
 	body, mapping, err := pc.buildRequestBodyAndMapping(configMappings)
 	if err != nil {
@@ -345,6 +352,14 @@ func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMa
 	}
 	http.SetMethod("POST")
 	http.SetBody(body)
+
+	log := logp.NewLogger(metricsetName).With("host", base.HostData().Host)
+
+	if logp.IsDebug(metricsetName) {
+
+		log.Debugw("Jolokia request body",
+			"body", string(body), "type", "request")
+	}
 
 	// Create an array with only one HTTP POST request
 	httpRequests := []*helper.HTTP{http}

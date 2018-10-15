@@ -74,18 +74,12 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 
 	jolokiaClient := NewJolokiaHTTPClient(config.HTTPMethod)
 
-	httpReqs, mapping, err := jolokiaClient.BuildRequestsAndMappings(config.Mappings, base)
+	httpReqs, mapping, err := jolokiaClient.BuildRequestsAndMappings(config.Mappings, base, metricsetName)
 	if err != nil {
 		return nil, err
 	}
 
 	log := logp.NewLogger(metricsetName).With("host", base.HostData().Host)
-
-	if logp.IsDebug(metricsetName) {
-		// FIXME add debug
-		// log.Debugw("Jolokia request body",
-		// 	"body", string(body), "type", "request")
-	}
 
 	return &MetricSet{
 		BaseMetricSet: base,
