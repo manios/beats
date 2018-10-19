@@ -42,7 +42,7 @@ func TestBuildJolokiaGETUri(t *testing.T) {
 				Attr:  `NonHeapMemoryUsage`,
 				Field: `max`,
 			},
-			expected: `/read/java.lang:type=Memory/NonHeapMemoryUsage/max?ignoreErrors=true&canonicalNaming=false`,
+			expected: `/read/java.lang:type=Memory/NonHeapMemoryUsage?ignoreErrors=true&canonicalNaming=false`,
 		},
 		{
 			mbean: `Catalina:name=HttpRequest1,type=RequestProcessor,worker=!"http-nio-8080!"`,
@@ -50,7 +50,7 @@ func TestBuildJolokiaGETUri(t *testing.T) {
 				Attr:  `globalProcessor`,
 				Field: `maxTime`,
 			},
-			expected: `/read/Catalina:name=HttpRequest1,type=RequestProcessor,worker=!"http-nio-8080!"/globalProcessor/maxTime?ignoreErrors=true&canonicalNaming=false`,
+			expected: `/read/Catalina:name=HttpRequest1,type=RequestProcessor,worker=!"http-nio-8080!"/globalProcessor?ignoreErrors=true&canonicalNaming=false`,
 		},
 	}
 
@@ -364,5 +364,37 @@ func TestMBeanAttributeHasField(t *testing.T) {
 		hasField := jolokiaGETClient.mBeanAttributeHasField(c.attribute)
 
 		assert.Equal(t, c.expected, hasField, "mbean attribute: "+c.attribute.Attr, "mbean attribute field: "+c.attribute.Field)
+	}
+}
+
+func TestNewJolokiaHTTPClient(t *testing.T) {
+
+	cases := []struct {
+		httpMethod string
+		expected   JolokiaHTTPClient
+	}{
+
+		{
+			httpMethod: "GET",
+			expected:   &JolokiaHTTPGetClient{},
+		},
+		{
+			httpMethod: "",
+			expected:   &JolokiaHTTPPostClient{},
+		},
+		{
+			httpMethod: "GET",
+			expected:   &JolokiaHTTPGetClient{},
+		},
+		{
+			httpMethod: "POST",
+			expected:   &JolokiaHTTPPostClient{},
+		},
+	}
+
+	for _, c := range cases {
+		jolokiaGETClient := NewJolokiaHTTPClient(c.httpMethod)
+
+		assert.Equal(t, c.expected, jolokiaGETClient, "httpMethod: "+c.httpMethod)
 	}
 }

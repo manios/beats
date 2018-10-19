@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/beats/metricbeat/helper"
 	"github.com/elastic/beats/metricbeat/mb"
@@ -213,8 +212,7 @@ func ParseMBeanName(mBeanName string) (*MBeanName, error) {
 type JolokiaHTTPClient interface {
 	// Fetches the information from Jolokia server regarding MBeans
 	BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet, metricsetName string) ([]*helper.HTTP, AttributeMapping, error)
-	// Maps the Jolokia response to Metricbeat events
-	EventMapping(httpResponseBodies []string) ([]common.MapStr, error)
+	BuildDebugRequestMessages(httpReqs []*helper.HTTP, base *mb.BaseMetricSet) (string, interface{})
 }
 
 type JolokiaHTTPGetClient struct {
@@ -253,11 +251,9 @@ func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMap
 	return httpRequests, responseMapping, err
 }
 
-// EventMapping da
-func (pc *JolokiaHTTPGetClient) EventMapping(httpResponseBodies []string) ([]common.MapStr, error) {
+func (pc *JolokiaHTTPGetClient) BuildDebugRequestMessages(httpReqs []*helper.HTTP, base *mb.BaseMetricSet) (string, interface{}) {
 
-	// TODO Do not return error
-	return nil, nil
+	return "", nil
 }
 
 // Builds a GET URI which will have the following format:
@@ -268,10 +264,6 @@ func (pc *JolokiaHTTPGetClient) buildJolokiaGETUri(mbean string, attr Attribute)
 
 	tmpURL := mbean + "/" + attr.Attr
 
-	if pc.mBeanAttributeHasField(&attr) {
-		tmpURL += "/" + attr.Field
-	}
-
 	tmpURL = fmt.Sprintf(initialURI, tmpURL)
 
 	return tmpURL
@@ -279,9 +271,9 @@ func (pc *JolokiaHTTPGetClient) buildJolokiaGETUri(mbean string, attr Attribute)
 
 func (pc *JolokiaHTTPGetClient) mBeanAttributeHasField(attr *Attribute) bool {
 
-	// if attr.Field != "" && (strings.Trim(attr.Field, " ") != "") {
-	// 	return true
-	// }
+	if attr.Field != "" && (strings.Trim(attr.Field, " ") != "") {
+		return true
+	}
 
 	return false
 }
@@ -308,29 +300,14 @@ func (pc *JolokiaHTTPGetClient) buildGetRequestURIs(mappings []JMXMapping) ([]st
 			return urls, nil, err
 		}
 
-		var optimisedAttrs []string
-
 		// For every attribute we will build a new URI
 		for _, attribute := range mapping.Attributes {
 			responseMapping[attributeMappingKey{mbean.Canonicalize(true), attribute.Attr}] = attribute
 
-			if !pc.mBeanAttributeHasField(&attribute) {
-				optimisedAttrs = append(optimisedAttrs, attribute.Attr)
-			} else {
-				urls = append(urls, pc.buildJolokiaGETUri(mbean.Canonicalize(true), attribute))
-			}
+			urls = append(urls, pc.buildJolokiaGETUri(mbean.Canonicalize(true), attribute))
+
 		}
 
-		// Last but not least, if we had one or more Attributes
-		// without a Field (path), then we can construct a URL with
-		// more than one Attributes separated by comma
-		if (optimisedAttrs != nil) && (len(optimisedAttrs) > 0) {
-			tmpAttr := Attribute{
-				Attr: strings.Join(optimisedAttrs, ","),
-			}
-
-			urls = append(urls, pc.buildJolokiaGETUri(mbean.Canonicalize(true), tmpAttr))
-		}
 	}
 
 	return urls, responseMapping, nil
@@ -367,10 +344,9 @@ func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMa
 	return httpRequests, mapping, nil
 }
 
-func (pc *JolokiaHTTPPostClient) EventMapping(httpResponseBodies []string) ([]common.MapStr, error) {
+func (pc *JolokiaHTTPPostClient) BuildDebugRequestMessages(httpReqs []*helper.HTTP, base *mb.BaseMetricSet) (string, interface{}) {
 
-	// TODO Do not return error
-	return nil, nil
+	return "", nil
 }
 
 // Parse strings with properties with the format key=value, being:
@@ -379,33 +355,6 @@ func (pc *JolokiaHTTPPostClient) EventMapping(httpResponseBodies []string) ([]co
 // - value a string that can be quoted or unquoted, if unquoted it cannot be empty and
 //   cannot contain any of the characters comma, equals, colon, or quote.
 var propertyRegexp = regexp.MustCompile("[^,=:*?]+=([^,=:\"]+|\".*\")")
-
-func (pc *JolokiaHTTPPostClient) canonicalizeMBeanName(name string) (string, error) {
-	// From https://docs.oracle.com/javase/8/docs/api/javax/management/ObjectName.html#getCanonicalName--
-	//
-	//   Returns the canonical form of the name; that is, a string representation where the
-	//   properties are sorted in lexical order.
-	//   The canonical form of the name is a String consisting of the domain part,
-	//   a colon (:), the canonical key property list, and a pattern indication.
-	//
-	parts := strings.SplitN(name, ":", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return name, fmt.Errorf("domain and properties needed in mbean name: %s", name)
-	}
-	domain := parts[0]
-
-	// Using this regexp instead of just splitting by commas because values can be quoted
-	// and contain commas, what complicates the parsing.
-	properties := propertyRegexp.FindAllString(parts[1], -1)
-	propertyList := strings.Join(properties, ",")
-	if len(propertyList) != len(parts[1]) {
-		// Some property didn't match
-		return name, fmt.Errorf("mbean properties must be in the form key=value: %s", name)
-	}
-
-	sort.Strings(properties)
-	return domain + ":" + strings.Join(properties, ","), nil
-}
 
 func (pc *JolokiaHTTPPostClient) buildRequestBodyAndMapping(mappings []JMXMapping) ([]byte, AttributeMapping, error) {
 	responseMapping := make(AttributeMapping)
@@ -421,10 +370,13 @@ func (pc *JolokiaHTTPPostClient) buildRequestBodyAndMapping(mappings []JMXMappin
 		"canonicalNaming": true,
 	}
 	for _, mapping := range mappings {
-		mbean, err := pc.canonicalizeMBeanName(mapping.MBean)
+		mbeanObj, err := ParseMBeanName(mapping.MBean)
 		if err != nil {
 			return nil, nil, err
 		}
+
+		mbean := mbeanObj.Canonicalize(false)
+
 		rb := RequestBlock{
 			Type:   "read",
 			MBean:  mbean,
