@@ -367,6 +367,53 @@ func TestMBeanAttributeHasField(t *testing.T) {
 	}
 }
 
+func TestBuildGETRequestsAndMappings(t *testing.T) {
+
+}
+func TestBuildPOSTRequestsAndMappings(t *testing.T) {
+
+}
+
+func getMappings() []JMXMapping {
+	return []JMXMapping{
+		{
+
+			MBean: "java.lang:type=Runtime",
+			Attributes: []Attribute{
+				{
+					Attr:  "Uptime",
+					Field: "uptime",
+				},
+			},
+		}, {
+			MBean: "java.lang:type=GarbageCollector,name=ConcurrentMarkSweep",
+			Attributes: []Attribute{
+				{
+					Attr:  "CollectionTime",
+					Field: "gc.cms_collection_time",
+				},
+				{
+					Attr:  "CollectionCount",
+					Field: "gc.cms_collection_count",
+				},
+			},
+		},
+		{
+			MBean: "java.lang:type=Memory",
+			Attributes: []Attribute{
+				{
+					Attr:  "HeapMemoryUsage",
+					Field: "memory.heap_usage",
+				},
+				{
+					Attr:  "NonHeapMemoryUsage",
+					Field: "memory.non_heap_usage",
+				},
+			},
+		},
+	}
+}
+
 func TestNewJolokiaHTTPClient(t *testing.T) {
 
 	cases := []struct {
