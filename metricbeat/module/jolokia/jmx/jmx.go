@@ -74,7 +74,7 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 
 	jolokiaClient := NewJolokiaHTTPClient(config.HTTPMethod)
 
-	httpReqs, mapping, err := jolokiaClient.BuildRequestsAndMappings(config.Mappings, base, metricsetName)
+	httpReqs, mapping, err := jolokiaClient.BuildRequestsAndMappings(config.Mappings, base)
 	if err != nil {
 		return nil, err
 	}

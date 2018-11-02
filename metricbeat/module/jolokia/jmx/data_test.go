@@ -101,7 +101,24 @@ func TestEventGroupingMapper(t *testing.T) {
 
 	assert.Nil(t, err)
 
+	// {
+	//     "request": {
+	//         "mbean": "java.lang:type=Memory",
+	//         "attribute": "HeapMemoryUsage",
+	//         "type": "read"
+	//     },
+	//     "value": {
+	//         "init": 127926272,
+	//         "committed": 122683392,
+	//         "max": 1814036480,
+	//         "used": 31934488
+	//     },
+	//     "timestamp": 1540664479,
+	//     "status": 200
+	// },
 	var mapping = AttributeMapping{
+		attributeMappingKey{"java.lang:type=Memory", "HeapMemoryUsage"}: Attribute{
+			Attr: "HeapMemoryUsage", Field: "memory.heap_usage"},
 		attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
 			Attr: "Uptime", Field: "uptime"},
 		attributeMappingKey{"java.lang:type=GarbageCollector,name=ConcurrentMarkSweep", "CollectionTime"}: Attribute{
@@ -122,6 +139,16 @@ func TestEventGroupingMapper(t *testing.T) {
 	assert.Nil(t, err)
 
 	expected := []common.MapStr{
+		{
+			"memory": common.MapStr{
+				"heap_usage": map[string]interface{}{
+					"init":      float64(127926272),
+					"committed": float64(122683392),
+					"max":       float64(1814036480),
+					"used":      float64(31934488),
+				},
+			},
+		},
 		{
 			"uptime": float64(47283),
 			"metrics": map[string]interface{}{

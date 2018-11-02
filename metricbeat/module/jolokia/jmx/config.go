@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/beats/metricbeat/helper"
 	"github.com/elastic/beats/metricbeat/mb"
 )
@@ -107,6 +106,10 @@ func (m AttributeMapping) Get(mbean, attr string) (Attribute, bool) {
 	a, found := m[attributeMappingKey{mbean, attr}]
 	return a, found
 }
+
+// type HTTPRequestContainer struct {
+// 	url
+// }
 
 // MBeanName is an internal struct used to store
 // the information by the parsed ```mbean``` (bean name) configuration
@@ -211,22 +214,20 @@ func ParseMBeanName(mBeanName string) (*MBeanName, error) {
 // Jolokia
 type JolokiaHTTPClient interface {
 	// Fetches the information from Jolokia server regarding MBeans
-	BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet, metricsetName string) ([]*helper.HTTP, AttributeMapping, error)
+	BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error)
 	BuildDebugRequestMessages(httpReqs []*helper.HTTP, base *mb.BaseMetricSet) (string, interface{})
 }
 
 type JolokiaHTTPGetClient struct {
 }
 
-func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet, metricsetName string) ([]*helper.HTTP, AttributeMapping, error) {
+func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error) {
 
 	// Create Jolokia URLs
 	uris, responseMapping, err := pc.buildGetRequestURIs(configMappings)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	log := logp.NewLogger(metricsetName).With("host", base.HostData().Host)
 
 	// Create one or more HTTP GET requests
 	var httpRequests []*helper.HTTP
@@ -235,11 +236,6 @@ func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMap
 
 		http.SetMethod("GET")
 		http.SetURI(base.HostData().SanitizedURI + i)
-
-		if logp.IsDebug(metricsetName) {
-			log.Debugw("Jolokia GET request",
-				"URI", http.GetURI, "type", "request")
-		}
 
 		if err != nil {
 			return nil, nil, err
@@ -259,10 +255,15 @@ func (pc *JolokiaHTTPGetClient) BuildDebugRequestMessages(httpReqs []*helper.HTT
 // Builds a GET URI which will have the following format:
 //
 // /read/<mbean>/<attribute>/[path]?ignoreErrors=true&canonicalNaming=false
-func (pc *JolokiaHTTPGetClient) buildJolokiaGETUri(mbean string, attr Attribute) string {
+func (pc *JolokiaHTTPGetClient) buildJolokiaGETUri(mbean string, attr []Attribute) string {
 	initialURI := "/read/%s?ignoreErrors=true&canonicalNaming=false"
 
-	tmpURL := mbean + "/" + attr.Attr
+	var attrList []string
+	for _, attribute := range attr {
+		attrList = append(attrList, attribute.Attr)
+	}
+
+	tmpURL := mbean + "/" + strings.Join(attrList, ",")
 
 	tmpURL = fmt.Sprintf(initialURI, tmpURL)
 
@@ -300,13 +301,13 @@ func (pc *JolokiaHTTPGetClient) buildGetRequestURIs(mappings []JMXMapping) ([]st
 			return urls, nil, err
 		}
 
-		// For every attribute we will build a new URI
+		// For every attribute we will build a response mapping
 		for _, attribute := range mapping.Attributes {
 			responseMapping[attributeMappingKey{mbean.Canonicalize(true), attribute.Attr}] = attribute
-
-			urls = append(urls, pc.buildJolokiaGETUri(mbean.Canonicalize(true), attribute))
-
 		}
+
+		// Build a new URI for all attributes
+		urls = append(urls, pc.buildJolokiaGETUri(mbean.Canonicalize(true), mapping.Attributes))
 
 	}
 
@@ -316,7 +317,7 @@ func (pc *JolokiaHTTPGetClient) buildGetRequestURIs(mappings []JMXMapping) ([]st
 type JolokiaHTTPPostClient struct {
 }
 
-func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet, metricsetName string) ([]*helper.HTTP, AttributeMapping, error) {
+func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error) {
 
 	body, mapping, err := pc.buildRequestBodyAndMapping(configMappings)
 	if err != nil {
@@ -330,14 +331,6 @@ func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMa
 	http.SetMethod("POST")
 	http.SetBody(body)
 
-	log := logp.NewLogger(metricsetName).With("host", base.HostData().Host)
-
-	if logp.IsDebug(metricsetName) {
-
-		log.Debugw("Jolokia request body",
-			"body", string(body), "type", "request")
-	}
-
 	// Create an array with only one HTTP POST request
 	httpRequests := []*helper.HTTP{http}
 
@@ -345,6 +338,21 @@ func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMa
 }
 
 func (pc *JolokiaHTTPPostClient) BuildDebugRequestMessages(httpReqs []*helper.HTTP, base *mb.BaseMetricSet) (string, interface{}) {
+
+	// FOR GET
+	// if logp.IsDebug(metricsetName) {
+	// 	log.Debugw("Jolokia GET request",
+	// 		"URI", http.GetURI, "type", "request")
+	// }
+
+	// FOR POST
+	// log := logp.NewLogger(metricsetName).With("host", base.HostData().Host)
+
+	// if logp.IsDebug(metricsetName) {
+
+	// 	log.Debugw("Jolokia request body",
+	// 		"body", string(body), "type", "request")
+	// }
 
 	return "", nil
 }
@@ -411,4 +419,24 @@ func NewJolokiaHTTPClient(httpMethod string) JolokiaHTTPClient {
 
 	return &JolokiaHTTPPostClient{}
 
+}
+
+func atmap() AttributeMapping {
+
+	resta := map[attributeMappingKey]Attribute{
+		attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
+			Attr:  "Uptime",
+			Field: "uptime",
+		},
+		attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionTime"}: Attribute{
+			Attr:  "CollectionTime",
+			Field: "gc.cms_collection_time",
+		},
+		attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionCount"}: Attribute{
+			Attr:  "CollectionCount",
+			Field: "gc.cms_collection_count",
+		},
+	}
+
+	return resta
 }

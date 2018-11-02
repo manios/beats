@@ -98,8 +98,17 @@ type eventKey struct {
 
 func eventMapping(content []byte, mapping AttributeMapping) ([]common.MapStr, error) {
 	var entries []Entry
+	var singleEntry Entry
+	isSingleEntry := false
 	if err := json.Unmarshal(content, &entries); err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal jolokia JSON response '%v'", string(content))
+		if err := json.Unmarshal(content, &singleEntry); err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal jolokia JSON response '%v'", string(content))
+		}
+		isSingleEntry = true
+	}
+
+	if isSingleEntry {
+		entries = append(entries, singleEntry)
 	}
 
 	// Generate a different event for each wildcard mbean, and and additional one

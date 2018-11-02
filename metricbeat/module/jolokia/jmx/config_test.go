@@ -25,38 +25,48 @@ import (
 
 func TestBuildJolokiaGETUri(t *testing.T) {
 	cases := []struct {
-		mbean     string
-		attribute *Attribute
-		expected  string
+		mbean      string
+		attributes []Attribute
+		expected   string
 	}{
 		{
 			mbean: `java.lang:type=Memory`,
-			attribute: &Attribute{
-				Attr: `NonHeapMemoryUsage`,
+			attributes: []Attribute{
+				Attribute{
+					Attr:  `HeapMemoryUsage`,
+					Field: `heapMemoryUsage`,
+				},
 			},
-			expected: `/read/java.lang:type=Memory/NonHeapMemoryUsage?ignoreErrors=true&canonicalNaming=false`,
+			expected: `/read/java.lang:type=Memory/HeapMemoryUsage?ignoreErrors=true&canonicalNaming=false`,
 		},
 		{
 			mbean: `java.lang:type=Memory`,
-			attribute: &Attribute{
-				Attr:  `NonHeapMemoryUsage`,
-				Field: `max`,
+			attributes: []Attribute{
+				Attribute{
+					Attr:  `HeapMemoryUsage`,
+					Field: `heapMemoryUsage`,
+				},
+				Attribute{
+					Attr:  `NonHeapMemoryUsage`,
+					Field: `nonHeapMemoryUsage`,
+				},
 			},
-			expected: `/read/java.lang:type=Memory/NonHeapMemoryUsage?ignoreErrors=true&canonicalNaming=false`,
+			expected: `/read/java.lang:type=Memory/HeapMemoryUsage,NonHeapMemoryUsage?ignoreErrors=true&canonicalNaming=false`,
 		},
 		{
 			mbean: `Catalina:name=HttpRequest1,type=RequestProcessor,worker=!"http-nio-8080!"`,
-			attribute: &Attribute{
-				Attr:  `globalProcessor`,
-				Field: `maxTime`,
-			},
+			attributes: []Attribute{
+				Attribute{
+					Attr:  `globalProcessor`,
+					Field: `maxTime`,
+				}},
 			expected: `/read/Catalina:name=HttpRequest1,type=RequestProcessor,worker=!"http-nio-8080!"/globalProcessor?ignoreErrors=true&canonicalNaming=false`,
 		},
 	}
 
 	for _, c := range cases {
 		jolokiaGETClient := &JolokiaHTTPGetClient{}
-		getURI := jolokiaGETClient.buildJolokiaGETUri(c.mbean, *c.attribute)
+		getURI := jolokiaGETClient.buildJolokiaGETUri(c.mbean, c.attributes)
 
 		assert.Equal(t, c.expected, getURI, "mbean: "+c.mbean)
 
@@ -368,6 +378,120 @@ func TestMBeanAttributeHasField(t *testing.T) {
 }
 
 func TestBuildGETRequestsAndMappings(t *testing.T) {
+
+	// map[attributeMappingKey]Attribute
+	// responseMapping := make(AttributeMapping)
+	// responseMapping[attributeMappingKey{"java.lang:type=Runtime", "Uptime"}] = Attribute{
+	// 	Attr:  "Uptime",
+	// 	Field: "uptime",
+	// }
+	// responseMapping[attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionTime"}] = Attribute{
+	// 	Attr:  "CollectionTime",
+	// 	Field: "gc.cms_collection_time",
+	// }
+	// responseMapping[attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionCount"}] = Attribute{
+	// 	Attr:  "CollectionCount",
+	// 	Field: "gc.cms_collection_count",
+	// }
+
+	// resta := map[attributeMappingKey]At tribute{
+	// 	attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
+	// 		Attr:  "Uptime",
+	// 		Field: "uptime",
+	// 	},
+	// 	attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionTime"}: Attribute{
+	// 		Attr:  "CollectionTime",
+	// 		Field: "gc.cms_collection_time",
+	// 	},
+	// 	attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionCount"}: Attribute{
+	// 		Attr:  "CollectionCount",
+	// 		Field: "gc.cms_collection_count",
+	// 	},
+	// }
+
+	// cases := []struct {
+	// 	mappings          []JMXMapping
+	// 	httpMethod        string
+	// 	uris              []string
+	// 	attributeMappings AttributeMapping
+	// }{
+
+	// 	{
+	// 		mappings: []JMXMapping{
+	// 			{
+
+	// 				MBean: "java.lang:type=Runtime",
+	// 				Attributes: []Attribute{
+	// 					{
+	// 						Attr:  "Uptime",
+	// 						Field: "uptime",
+	// 					},
+	// 				},
+	// 			}, {
+	// 				MBean: "java.lang:type=GarbageCollector,name=ConcurrentMarkSweep",
+	// 				Attributes: []Attribute{
+	// 					{
+	// 						Attr:  "CollectionTime",
+	// 						Field: "gc.cms_collection_time",
+	// 					},
+	// 					{
+	// 						Attr:  "CollectionCount",
+	// 						Field: "gc.cms_collection_count",
+	// 					},
+	// 				},
+	// 			},
+	// 			{
+	// 				MBean: "java.lang:type=Memory",
+	// 				Attributes: []Attribute{
+	// 					{
+	// 						Attr:  "HeapMemoryUsage",
+	// 						Field: "memory.heap_usage",
+	// 					},
+	// 					{
+	// 						Attr:  "NonHeapMemoryUsage",
+	// 						Field: "memory.non_heap_usage",
+	// 					},
+	// 				},
+	// 			},
+	// 		},
+	// 		httpMethod: "GET",
+	// 		uris: []string{
+	// 			"/jolokia/read/java.lang:type=Runtime/Uptime?ignoreErrors=true&canonicalNaming=false",
+	// 			"/jolokia/read/java.lang:name=ConcurrentMarkSweep!,type=GarbageCollector/CollectionTime?ignoreErrors=true&canonicalNaming=false",
+	// 			"/jolokia/read/java.lang:name=ConcurrentMarkSweep!,type=GarbageCollector/CollectionCount?ignoreErrors=true&canonicalNaming=false",
+	// 		},
+	// 		attributeMappings: map[attributeMappingKey]Attribute{
+	// 			attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
+	// 				Attr:  "Uptime",
+	// 				Field: "uptime",
+	// 			},
+	// 			attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionTime"}: Attribute{
+	// 				Attr:  "CollectionTime",
+	// 				Field: "gc.cms_collection_time",
+	// 			},
+	// 			attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionCount"}: Attribute{
+	// 				Attr:  "CollectionCount",
+	// 				Field: "gc.cms_collection_count",
+	// 			},
+	// 		},
+	// 	},
+	// }
+
+	// for _, c := range cases {
+
+	// 	// jolokiaGETClient := &JolokiaHTTPGetClient{}
+	// 	// sbib := mb.BaseMetricSet{}
+	// 	// sbib.HostData().SanitizedURI = `/jolokia`
+
+	// 	// httpReqs, attrMaps, myerr := jolokiaGETClient.BuildRequestsAndMappings(c.mappings)
+
+	// 	// for i, r := range httpReqs {
+
+	// 	// 	assert.Equal(t, c.uris[i], r.GetURI, "request uri: ", r.GetURI)
+
+	// 	// }
+
+	// }
 
 }
 func TestBuildPOSTRequestsAndMappings(t *testing.T) {
