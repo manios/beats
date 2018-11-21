@@ -25,12 +25,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/elastic/beats/libbeat/tests/compose"
 	mbtest "github.com/elastic/beats/metricbeat/mb/testing"
 )
 
 func TestFetch(t *testing.T) {
-	compose.EnsureUp(t, "jolokia")
+	// compose.EnsureUp(t, "jolokia")
 
 	for _, config := range getConfigs() {
 		f := mbtest.NewEventsFetcher(t, config)
@@ -46,7 +45,7 @@ func TestFetch(t *testing.T) {
 }
 
 func TestData(t *testing.T) {
-	compose.EnsureUp(t, "jolokia")
+	// compose.EnsureUp(t, "jolokia")
 
 	for _, config := range getConfigs() {
 		f := mbtest.NewEventsFetcher(t, config)
@@ -63,6 +62,7 @@ func getConfigs() []map[string]interface{} {
 			"module":     "jolokia",
 			"metricsets": []string{"jmx"},
 			"hosts":      []string{getEnvHost() + ":" + getEnvPort()},
+			"path":       "/o/jolokia",
 			"namespace":  "testnamespace",
 			"jmx.mappings": []map[string]interface{}{
 				{
@@ -106,6 +106,7 @@ func getConfigs() []map[string]interface{} {
 			"module":     "jolokia",
 			"metricsets": []string{"jmx"},
 			"hosts":      []string{getEnvHost() + ":" + getEnvPort()},
+			"path":       "/o/jolokia",
 			"namespace":  "testnamespace",
 			"jmx.mappings": []map[string]interface{}{
 				{
@@ -167,7 +168,7 @@ func getEnvPort() string {
 	port := os.Getenv("JOLOKIA_PORT")
 
 	if len(port) == 0 {
-		port = "8778"
+		port = "8080"
 	}
 	return port
 }

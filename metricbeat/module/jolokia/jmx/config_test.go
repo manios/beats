@@ -20,6 +20,7 @@ package jmx
 import (
 	"testing"
 
+	"github.com/elastic/beats/metricbeat/mb"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -394,7 +395,7 @@ func TestBuildGETRequestsAndMappings(t *testing.T) {
 	// 	Field: "gc.cms_collection_count",
 	// }
 
-	// resta := map[attributeMappingKey]At tribute{
+	// resta := map[attributeMappingKey]Attribute{
 	// 	attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
 	// 		Attr:  "Uptime",
 	// 		Field: "uptime",
@@ -409,92 +410,201 @@ func TestBuildGETRequestsAndMappings(t *testing.T) {
 	// 	},
 	// }
 
-	// cases := []struct {
-	// 	mappings          []JMXMapping
-	// 	httpMethod        string
-	// 	uris              []string
-	// 	attributeMappings AttributeMapping
-	// }{
+	cases := []struct {
+		mappings          []JMXMapping
+		httpMethod        string
+		uris              []string
+		attributeMappings AttributeMapping
+	}{
 
-	// 	{
-	// 		mappings: []JMXMapping{
-	// 			{
+		{
+			mappings: []JMXMapping{
+				{
 
-	// 				MBean: "java.lang:type=Runtime",
-	// 				Attributes: []Attribute{
-	// 					{
-	// 						Attr:  "Uptime",
-	// 						Field: "uptime",
-	// 					},
-	// 				},
-	// 			}, {
-	// 				MBean: "java.lang:type=GarbageCollector,name=ConcurrentMarkSweep",
-	// 				Attributes: []Attribute{
-	// 					{
-	// 						Attr:  "CollectionTime",
-	// 						Field: "gc.cms_collection_time",
-	// 					},
-	// 					{
-	// 						Attr:  "CollectionCount",
-	// 						Field: "gc.cms_collection_count",
-	// 					},
-	// 				},
-	// 			},
-	// 			{
-	// 				MBean: "java.lang:type=Memory",
-	// 				Attributes: []Attribute{
-	// 					{
-	// 						Attr:  "HeapMemoryUsage",
-	// 						Field: "memory.heap_usage",
-	// 					},
-	// 					{
-	// 						Attr:  "NonHeapMemoryUsage",
-	// 						Field: "memory.non_heap_usage",
-	// 					},
-	// 				},
-	// 			},
-	// 		},
-	// 		httpMethod: "GET",
-	// 		uris: []string{
-	// 			"/jolokia/read/java.lang:type=Runtime/Uptime?ignoreErrors=true&canonicalNaming=false",
-	// 			"/jolokia/read/java.lang:name=ConcurrentMarkSweep!,type=GarbageCollector/CollectionTime?ignoreErrors=true&canonicalNaming=false",
-	// 			"/jolokia/read/java.lang:name=ConcurrentMarkSweep!,type=GarbageCollector/CollectionCount?ignoreErrors=true&canonicalNaming=false",
-	// 		},
-	// 		attributeMappings: map[attributeMappingKey]Attribute{
-	// 			attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
-	// 				Attr:  "Uptime",
-	// 				Field: "uptime",
-	// 			},
-	// 			attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionTime"}: Attribute{
-	// 				Attr:  "CollectionTime",
-	// 				Field: "gc.cms_collection_time",
-	// 			},
-	// 			attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionCount"}: Attribute{
-	// 				Attr:  "CollectionCount",
-	// 				Field: "gc.cms_collection_count",
-	// 			},
-	// 		},
-	// 	},
-	// }
+					MBean: "java.lang:type=Runtime",
+					Attributes: []Attribute{
+						{
+							Attr:  "Uptime",
+							Field: "uptime",
+						},
+					},
+				}, {
+					MBean: "java.lang:type=GarbageCollector,name=ConcurrentMarkSweep",
+					Attributes: []Attribute{
+						{
+							Attr:  "CollectionTime",
+							Field: "gc.cms_collection_time",
+						},
+						{
+							Attr:  "CollectionCount",
+							Field: "gc.cms_collection_count",
+						},
+					},
+				},
+				{
+					MBean: "java.lang:type=Memory",
+					Attributes: []Attribute{
+						{
+							Attr:  "HeapMemoryUsage",
+							Field: "memory.heap_usage",
+						},
+						{
+							Attr:  "NonHeapMemoryUsage",
+							Field: "memory.non_heap_usage",
+						},
+					},
+				},
+			},
+			httpMethod: "GET",
+			uris: []string{
+				"/read/java.lang:type=Runtime/Uptime?ignoreErrors=true&canonicalNaming=false",
+				"/read/java.lang:name=ConcurrentMarkSweep,type=GarbageCollector/CollectionTime,CollectionCount?ignoreErrors=true&canonicalNaming=false",
+				"/read/java.lang:type=Memory/HeapMemoryUsage,NonHeapMemoryUsage?ignoreErrors=true&canonicalNaming=false",
+			},
+			attributeMappings: map[attributeMappingKey]Attribute{
+				attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
+					Attr:  "Uptime",
+					Field: "uptime",
+				},
+				attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionTime"}: Attribute{
+					Attr:  "CollectionTime",
+					Field: "gc.cms_collection_time",
+				},
+				attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionCount"}: Attribute{
+					Attr:  "CollectionCount",
+					Field: "gc.cms_collection_count",
+				},
+				attributeMappingKey{"java.lang:type=Memory", "HeapMemoryUsage"}: Attribute{
+					Attr:  "HeapMemoryUsage",
+					Field: "memory.heap_usage",
+				},
+				attributeMappingKey{"java.lang:type=Memory", "NonHeapMemoryUsage"}: Attribute{
+					Attr:  "NonHeapMemoryUsage",
+					Field: "memory.non_heap_usage",
+				},
+			},
+		},
+	}
 
-	// for _, c := range cases {
+	for _, c := range cases {
 
-	// 	// jolokiaGETClient := &JolokiaHTTPGetClient{}
-	// 	// sbib := mb.BaseMetricSet{}
-	// 	// sbib.HostData().SanitizedURI = `/jolokia`
+		jolokiaGETClient := &JolokiaHTTPGetClient{}
+		sbib := mb.BaseMetricSet{}
+		// sbib.HostData().SanitizedURI = `/jolokia`
 
-	// 	// httpReqs, attrMaps, myerr := jolokiaGETClient.BuildRequestsAndMappings(c.mappings)
+		httpReqs, attrMaps, myerr := jolokiaGETClient.BuildRequestObsAndMappings(c.mappings, sbib)
 
-	// 	// for i, r := range httpReqs {
+		assert.Nil(t, myerr)
+		assert.NotNil(t, attrMaps)
 
-	// 	// 	assert.Equal(t, c.uris[i], r.GetURI, "request uri: ", r.GetURI)
+		// Test returned URIs
+		for i, r := range httpReqs {
+			assert.Equal(t, c.uris[i], r.URI, "request uri: ", r.URI)
+		}
 
-	// 	// }
+		assert.Equal(t, c.attributeMappings, attrMaps)
 
-	// }
+	}
 
 }
 func TestBuildPOSTRequestsAndMappings(t *testing.T) {
+
+	cases := []struct {
+		mappings          []JMXMapping
+		httpMethod        string
+		bodies            []byte
+		attributeMappings AttributeMapping
+	}{
+
+		{
+			mappings: []JMXMapping{
+				{
+
+					MBean: "java.lang:type=Runtime",
+					Attributes: []Attribute{
+						{
+							Attr:  "Uptime",
+							Field: "uptime",
+						},
+					},
+				}, {
+					MBean: "java.lang:type=GarbageCollector,name=ConcurrentMarkSweep",
+					Attributes: []Attribute{
+						{
+							Attr:  "CollectionTime",
+							Field: "gc.cms_collection_time",
+						},
+						{
+							Attr:  "CollectionCount",
+							Field: "gc.cms_collection_count",
+						},
+					},
+				},
+				{
+					MBean: "java.lang:type=Memory",
+					Attributes: []Attribute{
+						{
+							Attr:  "HeapMemoryUsage",
+							Field: "memory.heap_usage",
+						},
+						{
+							Attr:  "NonHeapMemoryUsage",
+							Field: "memory.non_heap_usage",
+						},
+					},
+				},
+			},
+			httpMethod: "POST",
+			bodies: []string{
+				byte("/read/java.lang:type=Runtime/Uptime?ignoreErrors=true&canonicalNaming=false"),
+				[]byte("/read/java.lang:name=ConcurrentMarkSweep,type=GarbageCollector/CollectionTime,CollectionCount?ignoreErrors=true&canonicalNaming=false"),
+				[]byte("/read/java.lang:type=Memory/HeapMemoryUsage,NonHeapMemoryUsage?ignoreErrors=true&canonicalNaming=false"),
+			},
+			attributeMappings: map[attributeMappingKey]Attribute{
+				attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
+					Attr:  "Uptime",
+					Field: "uptime",
+				},
+				attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionTime"}: Attribute{
+					Attr:  "CollectionTime",
+					Field: "gc.cms_collection_time",
+				},
+				attributeMappingKey{"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector", "CollectionCount"}: Attribute{
+					Attr:  "CollectionCount",
+					Field: "gc.cms_collection_count",
+				},
+				attributeMappingKey{"java.lang:type=Memory", "HeapMemoryUsage"}: Attribute{
+					Attr:  "HeapMemoryUsage",
+					Field: "memory.heap_usage",
+				},
+				attributeMappingKey{"java.lang:type=Memory", "NonHeapMemoryUsage"}: Attribute{
+					Attr:  "NonHeapMemoryUsage",
+					Field: "memory.non_heap_usage",
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+
+		jolokiaPOSTClient := &JolokiaHTTPPostClient{}
+		sbib := mb.BaseMetricSet{}
+		// sbib.HostData().SanitizedURI = `/jolokia`
+
+		httpReqs, attrMaps, myerr := jolokiaPOSTClient.BuildRequestObsAndMappings(c.mappings, sbib)
+
+		assert.Nil(t, myerr)
+		assert.NotNil(t, attrMaps)
+
+		// Test returned URIs
+		for i, r := range httpReqs {
+			// assert.Equal(t, c.uris[i], r.Uri, "request uri: ", r.Uri)
+			assert.Equal(t, c.uris[i], r.Body, "body", r.Body)
+		}
+
+		assert.Equal(t, c.attributeMappings, attrMaps)
+
+	}
 
 }
 
@@ -536,6 +646,21 @@ func getMappings() []JMXMapping {
 			},
 		},
 	}
+}
+
+func TestCreateMetricSet(t *testing.T) {
+	// sbob := mb.BaseMetricSet{}
+
+	// http, err := helper.NewHTTP(sbob)
+
+	// assert.NotNil(t, sbob, "Sbob should be not nil")
+	// assert.Nil(t, err, "Error should be nil. Instead it is:", err)
+	// assert.NotNil(t, http, "Sbob should be not nil")
+
+	var sbob string
+	var mybody []byte
+	assert.Equal(t, "", sbob)
+	assert.Nil(t, mybody)
 }
 
 func TestNewJolokiaHTTPClient(t *testing.T) {

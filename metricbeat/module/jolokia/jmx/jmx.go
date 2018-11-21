@@ -56,7 +56,7 @@ type MetricSet struct {
 	mb.BaseMetricSet
 	mapping   AttributeMapping
 	namespace string
-	http      []*helper.HTTP
+	http      []*JolokiaHTTPRequest
 	log       *logp.Logger
 }
 
@@ -74,7 +74,7 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 
 	jolokiaClient := NewJolokiaHTTPClient(config.HTTPMethod)
 
-	httpReqs, mapping, err := jolokiaClient.BuildRequestsAndMappings(config.Mappings, base)
+	httpReqs, mapping, err := jolokiaClient.BuildRequestObsAndMappings(config.Mappings, base)
 	if err != nil {
 		return nil, err
 	}
@@ -95,18 +95,29 @@ func (m *MetricSet) Fetch() ([]common.MapStr, error) {
 
 	var allEvents []common.MapStr
 
-	for _, http := range m.http {
-		body, err := http.FetchContent()
+	for _, r := range m.http {
+
+		http, err := helper.NewHTTP(m.BaseMetricSet)
+
+		http.SetMethod(r.HttpMethod)
+
+		if r.HttpMethod == "GET" {
+			http.SetURI(m.BaseMetricSet.HostData().SanitizedURI + r.Uri)
+		} else {
+			http.SetBody(r.Body)
+		}
+
+		resBody, err := http.FetchContent()
 		if err != nil {
 			return nil, err
 		}
 
 		if logp.IsDebug(metricsetName) {
 			m.log.Debugw("Jolokia response body",
-				"host", m.HostData().Host, "body", string(body), "type", "response")
+				"host", m.HostData().Host, "uri", http.GetURI(), "body", string(resBody), "type", "response")
 		}
 
-		events, err := eventMapping(body, m.mapping)
+		events, err := eventMapping(resBody, m.mapping)
 		if err != nil {
 			return nil, err
 		}

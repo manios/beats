@@ -107,10 +107,6 @@ func (m AttributeMapping) Get(mbean, attr string) (Attribute, bool) {
 	return a, found
 }
 
-// type HTTPRequestContainer struct {
-// 	url
-// }
-
 // MBeanName is an internal struct used to store
 // the information by the parsed ```mbean``` (bean name) configuration
 // field in ```jmx.mappings```.
@@ -209,12 +205,26 @@ func ParseMBeanName(mBeanName string) (*MBeanName, error) {
 	return mybean, nil
 }
 
+// JolokiaHTTPRequest is a small struct which contains all request information
+// needed to construct a reqest helper.HTTP object which will be sent to Jolokia.
+// It is just an intermediary structure which can be easily tested as helper.HTTP
+// fields are all private.
+type JolokiaHTTPRequest struct {
+	// HttpMethod can be either "GET" or "POST"
+	HTTPMethod string
+	// URI which will be used to query Jolokia
+	URI string
+	// Request body which is only filled if the http method is "POST"
+	Body []byte
+}
+
 // JolokiaHTTPClient is an interface which describes
 // the behaviour of the client communication with
 // Jolokia
 type JolokiaHTTPClient interface {
 	// Fetches the information from Jolokia server regarding MBeans
 	BuildRequestsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*helper.HTTP, AttributeMapping, error)
+	BuildRequestObsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*JolokiaHTTPRequest, AttributeMapping, error)
 	BuildDebugRequestMessages(httpReqs []*helper.HTTP, base *mb.BaseMetricSet) (string, interface{})
 }
 
@@ -239,6 +249,28 @@ func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMap
 
 		if err != nil {
 			return nil, nil, err
+		}
+
+		httpRequests = append(httpRequests, http)
+	}
+
+	return httpRequests, responseMapping, err
+}
+
+func (pc *JolokiaHTTPGetClient) BuildRequestObsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*JolokiaHTTPRequest, AttributeMapping, error) {
+
+	// Create Jolokia URLs
+	uris, responseMapping, err := pc.buildGetRequestURIs(configMappings)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create one or more HTTP GET requests
+	var httpRequests []*JolokiaHTTPRequest
+	for _, i := range uris {
+		http := &JolokiaHTTPRequest{
+			HTTPMethod: "GET",
+			URI:        i,
 		}
 
 		httpRequests = append(httpRequests, http)
@@ -333,6 +365,24 @@ func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMa
 
 	// Create an array with only one HTTP POST request
 	httpRequests := []*helper.HTTP{http}
+
+	return httpRequests, mapping, nil
+}
+
+func (pc *JolokiaHTTPPostClient) BuildRequestObsAndMappings(configMappings []JMXMapping, base mb.BaseMetricSet) ([]*JolokiaHTTPRequest, AttributeMapping, error) {
+
+	body, mapping, err := pc.buildRequestBodyAndMapping(configMappings)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	http := &JolokiaHTTPRequest{
+		HTTPMethod: "POST",
+		Body:       body,
+	}
+
+	// Create an array with only one HTTP POST request
+	httpRequests := []*JolokiaHTTPRequest{http}
 
 	return httpRequests, mapping, nil
 }
