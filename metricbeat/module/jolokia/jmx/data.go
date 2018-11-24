@@ -100,7 +100,10 @@ func eventMapping(content []byte, mapping AttributeMapping) ([]common.MapStr, er
 	var entries []Entry
 	var singleEntry Entry
 	isSingleEntry := false
+
+	// When we use POST, the response is an array of Entry objects
 	if err := json.Unmarshal(content, &entries); err != nil {
+		// When we use GET, the response is a single Entry
 		if err := json.Unmarshal(content, &singleEntry); err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal jolokia JSON response '%v'", string(content))
 		}

@@ -91,6 +91,8 @@ func TestEventMapper(t *testing.T) {
 	assert.ElementsMatch(t, expected, events)
 }
 
+// TestEventGroupingMapperGetRequest tests responses which are returned
+// from a Jolokia POST request.
 func TestEventGroupingMapper(t *testing.T) {
 	absPath, err := filepath.Abs("./_meta/test")
 
@@ -101,24 +103,7 @@ func TestEventGroupingMapper(t *testing.T) {
 
 	assert.Nil(t, err)
 
-	// {
-	//     "request": {
-	//         "mbean": "java.lang:type=Memory",
-	//         "attribute": "HeapMemoryUsage",
-	//         "type": "read"
-	//     },
-	//     "value": {
-	//         "init": 127926272,
-	//         "committed": 122683392,
-	//         "max": 1814036480,
-	//         "used": 31934488
-	//     },
-	//     "timestamp": 1540664479,
-	//     "status": 200
-	// },
 	var mapping = AttributeMapping{
-		attributeMappingKey{"java.lang:type=Memory", "HeapMemoryUsage"}: Attribute{
-			Attr: "HeapMemoryUsage", Field: "memory.heap_usage"},
 		attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
 			Attr: "Uptime", Field: "uptime"},
 		attributeMappingKey{"java.lang:type=GarbageCollector,name=ConcurrentMarkSweep", "CollectionTime"}: Attribute{
@@ -140,16 +125,6 @@ func TestEventGroupingMapper(t *testing.T) {
 
 	expected := []common.MapStr{
 		{
-			"memory": common.MapStr{
-				"heap_usage": map[string]interface{}{
-					"init":      float64(127926272),
-					"committed": float64(122683392),
-					"max":       float64(1814036480),
-					"used":      float64(31934488),
-				},
-			},
-		},
-		{
 			"uptime": float64(47283),
 			"metrics": map[string]interface{}{
 				"atomikos_nbTransactions": float64(0),
@@ -165,6 +140,52 @@ func TestEventGroupingMapper(t *testing.T) {
 				"cms_collection_count": float64(1),
 			},
 		},
+		{
+			"memory": common.MapStr{
+				"heap_usage": map[string]interface{}{
+					"init":      float64(1073741824),
+					"committed": float64(1037959168),
+					"max":       float64(1037959168),
+					"used":      float64(227420472),
+				},
+				"non_heap_usage": map[string]interface{}{
+					"init":      float64(2555904),
+					"committed": float64(53477376),
+					"max":       float64(-1),
+					"used":      float64(50519768),
+				},
+			},
+		},
+	}
+
+	assert.ElementsMatch(t, expected, events)
+}
+
+// TestEventGroupingMapperGetRequest tests responses which are returned
+// from a Jolokia GET request. The difference from POST responses is that
+// GET method returns a single Entry, whereas POST method returns an array
+// of Entry objects
+func TestEventGroupingMapperGetRequest(t *testing.T) {
+	absPath, err := filepath.Abs("./_meta/test")
+
+	assert.NotNil(t, absPath)
+	assert.Nil(t, err)
+
+	jolokiaResponse, err := ioutil.ReadFile(absPath + "/jolokia_get_response.json")
+
+	assert.Nil(t, err)
+
+	var mapping = AttributeMapping{
+		attributeMappingKey{"java.lang:type=Memory", "HeapMemoryUsage"}: Attribute{
+			Attr: "HeapMemoryUsage", Field: "memory.heap_usage", Event: "memory"},
+		attributeMappingKey{"java.lang:type=Memory", "NonHeapMemoryUsage"}: Attribute{
+			Attr: "NonHEapMemoryUsage", Field: "memory.non_heap_usage", Event: "memory"},
+	}
+
+	events, err := eventMapping(jolokiaResponse, mapping)
+	assert.Nil(t, err)
+
+	expected := []common.MapStr{
 		{
 			"memory": common.MapStr{
 				"heap_usage": map[string]interface{}{

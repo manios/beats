@@ -74,12 +74,21 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 
 	jolokiaClient := NewJolokiaHTTPClient(config.HTTPMethod)
 
-	httpReqs, mapping, err := jolokiaClient.BuildRequestObsAndMappings(config.Mappings, base)
+	// Prepare Http request objects and attribute mappings according to selected Http method
+	httpReqs, mapping, err := jolokiaClient.BuildRequestsAndMappings(config.Mappings)
 	if err != nil {
 		return nil, err
 	}
 
 	log := logp.NewLogger(metricsetName).With("host", base.HostData().Host)
+
+	if logp.IsDebug(metricsetName) {
+
+		for _, r := range httpReqs {
+			log.Debugw("Jolokia request URI and body",
+				"httpMethod", r.HTTPMethod, "URI", r.URI, "body", string(r.Body), "type", "request")
+		}
+	}
 
 	return &MetricSet{
 		BaseMetricSet: base,
@@ -99,10 +108,10 @@ func (m *MetricSet) Fetch() ([]common.MapStr, error) {
 
 		http, err := helper.NewHTTP(m.BaseMetricSet)
 
-		http.SetMethod(r.HttpMethod)
+		http.SetMethod(r.HTTPMethod)
 
-		if r.HttpMethod == "GET" {
-			http.SetURI(m.BaseMetricSet.HostData().SanitizedURI + r.Uri)
+		if r.HTTPMethod == "GET" {
+			http.SetURI(m.BaseMetricSet.HostData().SanitizedURI + r.URI)
 		} else {
 			http.SetBody(r.Body)
 		}

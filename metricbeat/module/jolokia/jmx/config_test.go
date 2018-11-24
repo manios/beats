@@ -20,7 +20,6 @@ package jmx
 import (
 	"testing"
 
-	"github.com/elastic/beats/metricbeat/mb"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -415,8 +414,8 @@ func TestBuildGETRequestsAndMappings(t *testing.T) {
 		httpMethod        string
 		uris              []string
 		attributeMappings AttributeMapping
+		ok                bool
 	}{
-
 		{
 			mappings: []JMXMapping{
 				{
@@ -428,7 +427,64 @@ func TestBuildGETRequestsAndMappings(t *testing.T) {
 							Field: "uptime",
 						},
 					},
-				}, {
+					Target: Target{
+						URL:      `service:jmx:rmi:///jndi/rmi://targethost:9999/jmxrmi`,
+						User:     "jolokia",
+						Password: "password",
+					},
+				},
+				{
+					MBean: "java.lang:type=GarbageCollector,name=ConcurrentMarkSweep",
+					Attributes: []Attribute{
+						{
+							Attr:  "CollectionTime",
+							Field: "gc.cms_collection_time",
+						},
+						{
+							Attr:  "CollectionCount",
+							Field: "gc.cms_collection_count",
+						},
+					},
+					Target: Target{
+						URL:      `service:jmx:rmi:///jndi/rmi://targethost:9999/jmxrmi`,
+						User:     "jolokia",
+						Password: "password",
+					},
+				},
+				{
+					MBean: "java.lang:type=Memory",
+					Attributes: []Attribute{
+						{
+							Attr:  "HeapMemoryUsage",
+							Field: "memory.heap_usage",
+						},
+						{
+							Attr:  "NonHeapMemoryUsage",
+							Field: "memory.non_heap_usage",
+						},
+					},
+					Target: Target{
+						URL:      `service:jmx:rmi:///jndi/rmi://targethost:9999/jmxrmi`,
+						User:     "jolokia",
+						Password: "password",
+					},
+				},
+			},
+			ok: false,
+		},
+		{
+			mappings: []JMXMapping{
+				{
+
+					MBean: "java.lang:type=Runtime",
+					Attributes: []Attribute{
+						{
+							Attr:  "Uptime",
+							Field: "uptime",
+						},
+					},
+				},
+				{
 					MBean: "java.lang:type=GarbageCollector,name=ConcurrentMarkSweep",
 					Attributes: []Attribute{
 						{
@@ -483,16 +539,20 @@ func TestBuildGETRequestsAndMappings(t *testing.T) {
 					Field: "memory.non_heap_usage",
 				},
 			},
+			ok: true,
 		},
 	}
 
 	for _, c := range cases {
 
 		jolokiaGETClient := &JolokiaHTTPGetClient{}
-		sbib := mb.BaseMetricSet{}
-		// sbib.HostData().SanitizedURI = `/jolokia`
 
-		httpReqs, attrMaps, myerr := jolokiaGETClient.BuildRequestObsAndMappings(c.mappings, sbib)
+		httpReqs, attrMaps, myerr := jolokiaGETClient.BuildRequestsAndMappings(c.mappings)
+
+		if c.ok == false {
+			assert.Error(t, myerr, "should have failed for httpMethod: "+c.httpMethod)
+			continue
+		}
 
 		assert.Nil(t, myerr)
 		assert.NotNil(t, attrMaps)
@@ -512,12 +572,27 @@ func TestBuildPOSTRequestsAndMappings(t *testing.T) {
 	cases := []struct {
 		mappings          []JMXMapping
 		httpMethod        string
-		bodies            []byte
+		body              string
 		attributeMappings AttributeMapping
 	}{
 
 		{
 			mappings: []JMXMapping{
+				{
+
+					MBean: "java.lang:type=Runtime",
+					Attributes: []Attribute{
+						{
+							Attr:  "Uptime",
+							Field: "uptime",
+						},
+					},
+					Target: Target{
+						URL:      `service:jmx:rmi:///jndi/rmi://targethost:9999/jmxrmi`,
+						User:     "jolokia",
+						Password: "password",
+					},
+				},
 				{
 
 					MBean: "java.lang:type=Runtime",
@@ -555,11 +630,7 @@ func TestBuildPOSTRequestsAndMappings(t *testing.T) {
 				},
 			},
 			httpMethod: "POST",
-			bodies: []string{
-				byte("/read/java.lang:type=Runtime/Uptime?ignoreErrors=true&canonicalNaming=false"),
-				[]byte("/read/java.lang:name=ConcurrentMarkSweep,type=GarbageCollector/CollectionTime,CollectionCount?ignoreErrors=true&canonicalNaming=false"),
-				[]byte("/read/java.lang:type=Memory/HeapMemoryUsage,NonHeapMemoryUsage?ignoreErrors=true&canonicalNaming=false"),
-			},
+			body:       `[{"type":"read","mbean":"java.lang:type=Runtime","attribute":["Uptime"],"config":{"canonicalNaming":true,"ignoreErrors":true},"target":{"url":"service:jmx:rmi:///jndi/rmi://targethost:9999/jmxrmi","user":"jolokia","password":"password"}},{"type":"read","mbean":"java.lang:type=Runtime","attribute":["Uptime"],"config":{"canonicalNaming":true,"ignoreErrors":true}},{"type":"read","mbean":"java.lang:name=ConcurrentMarkSweep,type=GarbageCollector","attribute":["CollectionTime","CollectionCount"],"config":{"canonicalNaming":true,"ignoreErrors":true}},{"type":"read","mbean":"java.lang:type=Memory","attribute":["HeapMemoryUsage","NonHeapMemoryUsage"],"config":{"canonicalNaming":true,"ignoreErrors":true}}]`,
 			attributeMappings: map[attributeMappingKey]Attribute{
 				attributeMappingKey{"java.lang:type=Runtime", "Uptime"}: Attribute{
 					Attr:  "Uptime",
@@ -588,18 +659,16 @@ func TestBuildPOSTRequestsAndMappings(t *testing.T) {
 	for _, c := range cases {
 
 		jolokiaPOSTClient := &JolokiaHTTPPostClient{}
-		sbib := mb.BaseMetricSet{}
-		// sbib.HostData().SanitizedURI = `/jolokia`
 
-		httpReqs, attrMaps, myerr := jolokiaPOSTClient.BuildRequestObsAndMappings(c.mappings, sbib)
+		httpReqs, attrMaps, myerr := jolokiaPOSTClient.BuildRequestsAndMappings(c.mappings)
 
 		assert.Nil(t, myerr)
 		assert.NotNil(t, attrMaps)
 
 		// Test returned URIs
-		for i, r := range httpReqs {
+		for _, r := range httpReqs {
 			// assert.Equal(t, c.uris[i], r.Uri, "request uri: ", r.Uri)
-			assert.Equal(t, c.uris[i], r.Body, "body", r.Body)
+			assert.Equal(t, c.body, string(r.Body), "body", r.Body)
 		}
 
 		assert.Equal(t, c.attributeMappings, attrMaps)
