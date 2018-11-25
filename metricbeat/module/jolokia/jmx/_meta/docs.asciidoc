@@ -58,6 +58,50 @@ When wildcards are used, an event is sent to Elastic for each matching
 MBean, and an `mbean` field is added to the event.
 
 [float]
+=== Accessing Jolokia via POST or GET method
+
+All requests to Jolokia are made by default using HTTP POST method. However, there are specific circumstances 
+on the environment where Jolokia agent is deployed, in which POST method can be unavailable. In this case you can use
+HTTP GET method, by defining `http_method` attribute. In general you can use either POST or GET, but GET has the following
+drawbacks:
+
+1. https://jolokia.org/reference/html/protocol.html#protocol-proxy[Proxy requests]
+are not allowed.
+1. If more than one `jmx.mappings` are defined, then Metricbeat will perform as many GET requests as the mappings defined. 
+   For example the following configuration with 3 mappings:
+
+[source,yaml]
+----   
+- module: jolokia
+  metricsets: ["jmx"]
+  enabled: true  
+  period: 10s
+  hosts: ["localhost:8080"]
+  namespace: "jolokia_metrics"
+  path: "/jolokia"
+  http_method: 'GET'
+  jmx.mappings:
+    - mbean: 'java.lang:type=Memory'
+      attributes:
+       - attr: HeapMemoryUsage
+         field: memory.heap_usage
+       - attr: NonHeapMemoryUsage
+         field: memory.non_heap_usage
+    - mbean: 'Catalina:name=*,type=ThreadPool'
+      attributes:
+       - attr: port
+         field: catalina.port
+       - attr: maxConnections
+         field: catalina.maxConnections
+    - mbean: 'java.lang:type=Runtime'
+      attributes:
+       - attr: Uptime
+         field: uptime
+----
+will create 3 GET requests, one for every MBean. On the contrary, if you use HTTP POST, Metricbeat will create only 1 request to Jolokia.
+
+
+[float]
 === Limitations
 1. All Jolokia requests have `canonicalNaming` set to `false`. See the
 https://jolokia.org/reference/html/protocol.html[Jolokia Protocol] documentation

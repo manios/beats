@@ -112,6 +112,15 @@ type MBeanName struct {
 	Properties map[string]string
 }
 
+// Canonicalize Returns the canonical form of the name; that is, a string representation where the
+// properties are sorted in lexical order.
+// The canonical form of the name is a String consisting of the domain part,
+// a colon (:), the canonical key property list, and a pattern indication.
+//
+// For more information refer to Java 8 [getCanonicalName()](https://docs.oracle.com/javase/8/docs/api/javax/management/ObjectName.html#getCanonicalName--)
+// method.
+//
+// Set "escape" parameter to true if you want to use the canonicalized name for a Jolokia HTTP GET request, false otherwise.
 func (m *MBeanName) Canonicalize(escape bool) string {
 
 	var propertySlice []string
@@ -215,18 +224,22 @@ type JolokiaHTTPRequest struct {
 	Body []byte
 }
 
-// JolokiaHTTPClient is an interface which describes
-// the behaviour of the client communication with
-// Jolokia
-type JolokiaHTTPClient interface {
+// JolokiaHTTPRequestBuilder is an interface which describes
+// the behaviour of the builder which generates the HTTP request
+// which is sent to Jolokia
+type JolokiaHTTPRequestBuilder interface {
 	// Fetches the information from Jolokia server regarding MBeans
 	BuildRequestsAndMappings(configMappings []JMXMapping) ([]*JolokiaHTTPRequest, AttributeMapping, error)
 }
 
-type JolokiaHTTPGetClient struct {
+// JolokiaHTTPGetBuilder constructs an HTTP GET request
+// which will read MBean information from Jolokia
+type JolokiaHTTPGetBuilder struct {
 }
 
-func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMapping) ([]*JolokiaHTTPRequest, AttributeMapping, error) {
+// BuildRequestsAndMappings generates HTTP GET request
+// such as URI,Body.
+func (pc *JolokiaHTTPGetBuilder) BuildRequestsAndMappings(configMappings []JMXMapping) ([]*JolokiaHTTPRequest, AttributeMapping, error) {
 
 	// Create Jolokia URLs
 	uris, responseMapping, err := pc.buildGetRequestURIs(configMappings)
@@ -251,7 +264,7 @@ func (pc *JolokiaHTTPGetClient) BuildRequestsAndMappings(configMappings []JMXMap
 // Builds a GET URI which will have the following format:
 //
 // /read/<mbean>/<attribute>/[path]?ignoreErrors=true&canonicalNaming=false
-func (pc *JolokiaHTTPGetClient) buildJolokiaGETUri(mbean string, attr []Attribute) string {
+func (pc *JolokiaHTTPGetBuilder) buildJolokiaGETUri(mbean string, attr []Attribute) string {
 	initialURI := "/read/%s?ignoreErrors=true&canonicalNaming=false"
 
 	var attrList []string
@@ -266,7 +279,7 @@ func (pc *JolokiaHTTPGetClient) buildJolokiaGETUri(mbean string, attr []Attribut
 	return tmpURL
 }
 
-func (pc *JolokiaHTTPGetClient) mBeanAttributeHasField(attr *Attribute) bool {
+func (pc *JolokiaHTTPGetBuilder) mBeanAttributeHasField(attr *Attribute) bool {
 
 	if attr.Field != "" && (strings.Trim(attr.Field, " ") != "") {
 		return true
@@ -275,7 +288,7 @@ func (pc *JolokiaHTTPGetClient) mBeanAttributeHasField(attr *Attribute) bool {
 	return false
 }
 
-func (pc *JolokiaHTTPGetClient) buildGetRequestURIs(mappings []JMXMapping) ([]string, AttributeMapping, error) {
+func (pc *JolokiaHTTPGetBuilder) buildGetRequestURIs(mappings []JMXMapping) ([]string, AttributeMapping, error) {
 
 	responseMapping := make(AttributeMapping)
 	var urls []string
@@ -310,10 +323,14 @@ func (pc *JolokiaHTTPGetClient) buildGetRequestURIs(mappings []JMXMapping) ([]st
 	return urls, responseMapping, nil
 }
 
-type JolokiaHTTPPostClient struct {
+// JolokiaHTTPPostBuilder constructs an HTTP GET request
+// which will read MBean information from Jolokia
+type JolokiaHTTPPostBuilder struct {
 }
 
-func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMapping) ([]*JolokiaHTTPRequest, AttributeMapping, error) {
+// BuildRequestsAndMappings generates HTTP POST request
+// such as URI,Body.
+func (pc *JolokiaHTTPPostBuilder) BuildRequestsAndMappings(configMappings []JMXMapping) ([]*JolokiaHTTPRequest, AttributeMapping, error) {
 
 	body, mapping, err := pc.buildRequestBodyAndMapping(configMappings)
 	if err != nil {
@@ -338,7 +355,7 @@ func (pc *JolokiaHTTPPostClient) BuildRequestsAndMappings(configMappings []JMXMa
 //   cannot contain any of the characters comma, equals, colon, or quote.
 var propertyRegexp = regexp.MustCompile("[^,=:*?]+=([^,=:\"]+|\".*\")")
 
-func (pc *JolokiaHTTPPostClient) buildRequestBodyAndMapping(mappings []JMXMapping) ([]byte, AttributeMapping, error) {
+func (pc *JolokiaHTTPPostBuilder) buildRequestBodyAndMapping(mappings []JMXMapping) ([]byte, AttributeMapping, error) {
 	responseMapping := make(AttributeMapping)
 	var blocks []RequestBlock
 
@@ -385,12 +402,12 @@ func (pc *JolokiaHTTPPostClient) buildRequestBodyAndMapping(mappings []JMXMappin
 
 // NewJolokiaHTTPClient is a factory method which creates and returns an implementation
 // class of JolokiaHTTPClient interface. HTTP GET and POST are currently supported.
-func NewJolokiaHTTPClient(httpMethod string) JolokiaHTTPClient {
+func NewJolokiaHTTPClient(httpMethod string) JolokiaHTTPRequestBuilder {
 
 	if httpMethod == "GET" {
-		return &JolokiaHTTPGetClient{}
+		return &JolokiaHTTPGetBuilder{}
 	}
 
-	return &JolokiaHTTPPostClient{}
+	return &JolokiaHTTPPostBuilder{}
 
 }

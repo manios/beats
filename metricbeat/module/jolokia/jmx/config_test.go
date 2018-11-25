@@ -65,8 +65,8 @@ func TestBuildJolokiaGETUri(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		jolokiaGETClient := &JolokiaHTTPGetClient{}
-		getURI := jolokiaGETClient.buildJolokiaGETUri(c.mbean, c.attributes)
+		jolokiaGETBuilder := &JolokiaHTTPGetBuilder{}
+		getURI := jolokiaGETBuilder.buildJolokiaGETUri(c.mbean, c.attributes)
 
 		assert.Equal(t, c.expected, getURI, "mbean: "+c.mbean)
 
@@ -370,8 +370,8 @@ func TestMBeanAttributeHasField(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		jolokiaGETClient := &JolokiaHTTPGetClient{}
-		hasField := jolokiaGETClient.mBeanAttributeHasField(c.attribute)
+		jolokiaGETBuilder := &JolokiaHTTPGetBuilder{}
+		hasField := jolokiaGETBuilder.mBeanAttributeHasField(c.attribute)
 
 		assert.Equal(t, c.expected, hasField, "mbean attribute: "+c.attribute.Attr, "mbean attribute field: "+c.attribute.Field)
 	}
@@ -545,9 +545,9 @@ func TestBuildGETRequestsAndMappings(t *testing.T) {
 
 	for _, c := range cases {
 
-		jolokiaGETClient := &JolokiaHTTPGetClient{}
+		jolokiaGETBuilder := &JolokiaHTTPGetBuilder{}
 
-		httpReqs, attrMaps, myerr := jolokiaGETClient.BuildRequestsAndMappings(c.mappings)
+		httpReqs, attrMaps, myerr := jolokiaGETBuilder.BuildRequestsAndMappings(c.mappings)
 
 		if c.ok == false {
 			assert.Error(t, myerr, "should have failed for httpMethod: "+c.httpMethod)
@@ -658,9 +658,9 @@ func TestBuildPOSTRequestsAndMappings(t *testing.T) {
 
 	for _, c := range cases {
 
-		jolokiaPOSTClient := &JolokiaHTTPPostClient{}
+		jolokiaPOSTBuilder := &JolokiaHTTPPostBuilder{}
 
-		httpReqs, attrMaps, myerr := jolokiaPOSTClient.BuildRequestsAndMappings(c.mappings)
+		httpReqs, attrMaps, myerr := jolokiaPOSTBuilder.BuildRequestsAndMappings(c.mappings)
 
 		assert.Nil(t, myerr)
 		assert.NotNil(t, attrMaps)
@@ -736,24 +736,24 @@ func TestNewJolokiaHTTPClient(t *testing.T) {
 
 	cases := []struct {
 		httpMethod string
-		expected   JolokiaHTTPClient
+		expected   JolokiaHTTPRequestBuilder
 	}{
 
 		{
 			httpMethod: "GET",
-			expected:   &JolokiaHTTPGetClient{},
+			expected:   &JolokiaHTTPGetBuilder{},
 		},
 		{
 			httpMethod: "",
-			expected:   &JolokiaHTTPPostClient{},
+			expected:   &JolokiaHTTPPostBuilder{},
 		},
 		{
 			httpMethod: "GET",
-			expected:   &JolokiaHTTPGetClient{},
+			expected:   &JolokiaHTTPGetBuilder{},
 		},
 		{
 			httpMethod: "POST",
-			expected:   &JolokiaHTTPPostClient{},
+			expected:   &JolokiaHTTPPostBuilder{},
 		},
 	}
 
